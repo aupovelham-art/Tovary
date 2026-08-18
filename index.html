@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>База аксессуаров</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:linear-gradient(135deg,#f0f4ff 0%,#f8fafc 50%,#f0fdf4 100%);min-height:100vh}
+  .card{background:#fff;border-radius:16px;box-shadow:0 1px 3px rgba(0,0,0,.06),0 4px 12px rgba(99,102,241,.04);transition:all .25s}
+  .card:hover{box-shadow:0 4px 16px rgba(99,102,241,.1)}
+  .btn-primary{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-radius:12px;font-weight:500;transition:all .2s}
+  .btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(99,102,241,.4)}
+  .btn-success{background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;border-radius:12px;font-weight:500;transition:all .2s}
+  .btn-success:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(34,197,94,.4)}
+  .tab-btn{transition:all .2s;position:relative}
+  .tab-btn.active{color:#6366f1;font-weight:600}
+  .tab-btn.active::after{content:'';position:absolute;bottom:-1px;left:0;right:0;height:2px;background:linear-gradient(90deg,#6366f1,#8b5cf6);border-radius:2px}
+  .accordion-header{cursor:pointer;user-select:none;transition:background .2s}
+  .accordion-header:hover{background:#f8fafc}
+  .accordion-body{max-height:0;overflow:hidden;transition:max-height .35s}
+  .accordion-body.open{max-height:4000px}
+  .chevron{transition:transform .3s;display:inline-block}
+  .chevron.open{transform:rotate(180deg)}
+  .product-row{animation:fadeIn .25s}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes slideUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+  .modal-enter{animation:slideUp .25s}
+  .toast{position:fixed;bottom:24px;right:24px;z-index:100;animation:slideUp .25s}
+  .low-stock{color:#ef4444;font-weight:600}
+  .photo-thumb{width:48px;height:48px;object-fit:cover;border-radius:10px;background:#f1f5f9}
+  .stat-card{background:#fff;border-radius:14px;padding:12px 16px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  input,select{outline:none;transition:border-color .2s,box-shadow .2s}
+  input:focus,select:focus{border-color:#6366f1!important;box-shadow:0 0 0 3px rgba(99,102,241,.15)}
+  .sale-product-card{transition:all .15s;cursor:pointer}
+  .sale-product-card:hover{border-color:#6366f1;background:#f5f3ff}
+  .sale-product-card.selected{border-color:#6366f1;background:#eef2ff;box-shadow:0 0 0 2px rgba(99,102,241,.3)}
+  .badge{font-size:11px;padding:2px 8px;border-radius:999px;font-weight:500}
+  .help-box{background:linear-gradient(135deg,#eef2ff,#f0fdf4);border:1px solid #e0e7ff}
+  .period-btn{transition:all .15s}
+</style>
+</head>
+<body class="text-gray-800">
+<div class="max-w-5xl mx-auto px-4 py-5 sm:py-8">
+
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+    <div>
+      <h1 class="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">База аксессуаров</h1>
+      <p class="text-sm text-gray-500 mt-0.5">Учёт · Продажи · Остатки · Аналитика</p>
+    </div>
+    <div class="flex gap-2 flex-wrap" id="statsBar"></div>
+  </div>
+
+  <div class="help-box rounded-2xl p-4 mb-5 text-sm">
+    <div class="flex items-start justify-between gap-3 cursor-pointer" onclick="toggleHelp()">
+      <div>
+        <div class="font-semibold text-indigo-700">Зачем это нужно продавцу аксессуаров</div>
+        <div class="text-gray-600 mt-1">Одна база вместо блокнота. Ищешь по модели — сразу видишь чехлы и остатки. Продажа за 10 секунд. График по часам показывает, когда лучше продаётся.</div>
+      </div>
+      <span id="helpChevron" class="text-indigo-500 text-lg">▾</span>
+    </div>
+    <div id="helpFull" class="hidden mt-3 text-gray-600 space-y-2 border-t border-indigo-100 pt-3">
+      <p><b>Как продать за 10 секунд:</b></p>
+      <ol class="list-decimal pl-5 space-y-1">
+        <li>Вкладка «Продажи»</li>
+        <li>Категория или поиск по модели (Redmi 11)</li>
+        <li>Кликни товар → количество → «Провести»</li>
+      </ol>
+      <p class="mt-2"><b>Почему удобнее блокнота:</b></p>
+      <ul class="list-disc pl-5 space-y-1">
+        <li>Поиск по модели телефона</li>
+        <li>Остатки обновляются сами после продажи</li>
+        <li>Мин/макс цена для торга</li>
+        <li>График по часам за сегодня + история по дням</li>
+        <li>Всё офлайн, данные только у тебя</li>
+        <li>Быстрые +/− по остаткам</li>
+        <li>Отмена продажи с возвратом на склад</li>
+        <li>Фильтр «только заканчивается»</li>
+        <li>Экспорт базы</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="flex gap-1 sm:gap-4 border-b border-gray-200 mb-5 overflow-x-auto text-sm">
+    <button onclick="showTab('products')" id="tab-products" class="tab-btn active px-3 py-2.5 whitespace-nowrap">Товары</button>
+    <button onclick="showTab('sales')" id="tab-sales" class="tab-btn px-3 py-2.5 text-gray-500 whitespace-nowrap">Продажи</button>
+    <button onclick="showTab('history')" id="tab-history" class="tab-btn px-3 py-2.5 text-gray-500 whitespace-nowrap">История + график</button>
+    <button onclick="showTab('categories')" id="tab-categories" class="tab-btn px-3 py-2.5 text-gray-500 whitespace-nowrap">Категории</button>
+  </div>
+
+  <!-- PRODUCTS -->
+  <div id="view-products">
+    <div class="flex flex-col sm:flex-row gap-2 mb-4">
+      <input type="text" id="searchInput" placeholder="Поиск: название или модель (Redmi 11...)" class="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white" oninput="renderProducts()">
+      <button onclick="toggleLowOnly()" id="btnLowOnly" class="px-3 py-2.5 text-sm rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-red-50 whitespace-nowrap">Только мало</button>
+      <button onclick="openProductModal()" class="btn-primary px-5 py-2.5 text-sm whitespace-nowrap">+ Товар</button>
+    </div>
+    <div id="productsList" class="space-y-3"></div>
+  </div>
+
+  <!-- SALES -->
+  <div id="view-sales" class="hidden">
+    <div class="card p-4 mb-4">
+      <div class="flex flex-col sm:flex-row gap-2 mb-3">
+        <select id="saleCategory" onchange="filterSaleProducts()" class="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white"><option value="">Все категории</option></select>
+        <input type="text" id="saleSearch" placeholder="Поиск по названию или модели..." class="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white" oninput="filterSaleProducts()">
+      </div>
+      <div id="saleProductPicker" class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto"></div>
+    </div>
+    <div class="card p-5">
+      <h2 class="font-semibold mb-3">Корзина</h2>
+      <div id="saleCart" class="space-y-2 mb-4 min-h-[40px]"><div class="text-sm text-gray-400">Выберите товары выше</div></div>
+      <div class="flex items-center justify-between pt-4 border-t border-gray-100">
+        <div class="text-xl font-bold text-indigo-600">Итого: <span id="saleTotal">0</span> ₽</div>
+        <button onclick="completeSale()" class="btn-success px-6 py-2.5 text-sm">Провести продажу</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HISTORY -->
+  <div id="view-history" class="hidden">
+    <div class="card p-5 mb-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+        <h2 class="font-semibold">Сегодня по часам</h2>
+        <div class="text-sm text-gray-500" id="todaySummary">—</div>
+      </div>
+      <div class="h-48 mb-2"><canvas id="hourlyChart"></canvas></div>
+      <p class="text-xs text-gray-400">Столбцы — сумма продаж в этот час. Обновляется после каждой продажи.</p>
+    </div>
+
+    <div class="card p-4 mb-4">
+      <h2 class="font-semibold mb-3 text-sm">Продажи сегодня (по времени)</h2>
+      <div id="todaySalesList" class="space-y-2 max-h-48 overflow-y-auto text-sm"></div>
+    </div>
+
+    <div class="card p-5 mb-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+        <h2 class="font-semibold">По дням</h2>
+        <div class="flex gap-1.5 text-sm">
+          <button onclick="setChartPeriod(7)" id="period-7" class="period-btn px-3 py-1 rounded-lg bg-gray-100 text-gray-600">7 дней</button>
+          <button onclick="setChartPeriod(14)" id="period-14" class="period-btn px-3 py-1 rounded-lg bg-indigo-100 text-indigo-700 font-medium">14 дней</button>
+          <button onclick="setChartPeriod(30)" id="period-30" class="period-btn px-3 py-1 rounded-lg bg-gray-100 text-gray-600">30 дней</button>
+        </div>
+      </div>
+      <div class="h-48"><canvas id="salesChart"></canvas></div>
+    </div>
+
+    <div class="flex justify-between items-center mb-3">
+      <h2 class="font-semibold">Вся история</h2>
+      <button onclick="exportData()" class="text-sm text-indigo-600 hover:underline">Экспорт JSON</button>
+    </div>
+    <div id="historyList" class="space-y-3"></div>
+  </div>
+
+  <!-- CATEGORIES -->
+  <div id="view-categories" class="hidden">
+    <div class="card p-5">
+      <div class="flex gap-2 mb-4">
+        <input type="text" id="newCategory" placeholder="Новая категория" class="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm" onkeydown="if(event.key==='Enter')addCategory()">
+        <button onclick="addCategory()" class="btn-primary px-5 py-2.5 text-sm">Добавить</button>
+      </div>
+      <div id="categoriesList" class="space-y-2"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div id="productModal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50 p-4 backdrop-blur-sm">
+  <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl modal-enter max-h-[90vh] overflow-y-auto">
+    <h2 class="text-lg font-semibold mb-4" id="modalTitle">Новый товар</h2>
+    <input type="hidden" id="editId">
+    <div class="space-y-3">
+      <div><label class="text-xs font-medium text-gray-500">Название *</label>
+        <input type="text" id="pName" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-1"></div>
+      <div><label class="text-xs font-medium text-gray-500">Категория</label>
+        <select id="pCategory" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-1"></select></div>
+      <div class="grid grid-cols-3 gap-2">
+        <div><label class="text-xs font-medium text-gray-500">Цена ₽ *</label>
+          <input type="number" id="pPrice" min="0" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-1"></div>
+        <div><label class="text-xs font-medium text-gray-500">Мин. цена</label>
+          <input type="number" id="pMinPrice" min="0" placeholder="—" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-1"></div>
+        <div><label class="text-xs font-medium text-gray-500">Макс. цена</label>
+          <input type="number" id="pMaxPrice" min="0" placeholder="—" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-1"></div>
+      </div>
+      <div><label class="text-xs font-medium text-gray-500">Количество</label>
+        <input type="number" id="pStock" min="0" value="1" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-1"></div>
+      <div><label class="text-xs font-medium text-gray-500">Совместимые модели</label>
+        <input type="text" id="pModels" placeholder="Redmi 11, Note 12, iPhone 13" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-1"></div>
+      <div><label class="text-xs font-medium text-gray-500">Заметка</label>
+        <input type="text" id="pNote" placeholder="Цвет, материал..." class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-1"></div>
+      <div><label class="text-xs font-medium text-gray-500">Фото</label>
+        <input type="file" id="pPhoto" accept="image/*" class="w-full text-sm mt-1" onchange="previewPhoto(event)">
+        <img id="photoPreview" class="mt-2 rounded-xl hidden" style="max-height:90px;max-width:90px;object-fit:cover"></div>
+    </div>
+    <div class="flex gap-2 mt-5">
+      <button onclick="closeProductModal()" class="flex-1 border border-gray-200 rounded-xl py-2.5 text-sm hover:bg-gray-50">Отмена</button>
+      <button onclick="saveProduct()" class="flex-1 btn-primary py-2.5 text-sm">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script>
+var data={categories:['Чехлы','Зарядки','Наушники','Лампы','Кабели','Защитные стёкла'],products:[],sales:[]};
+var cart=[],chartInstance=null,hourlyInstance=null,openCategories={},chartPeriod=14,lowOnly=false;
+
+function load(){try{var s=localStorage.getItem('accessoryDB_v3');if(s)data=JSON.parse(s)}catch(e){}
+if(!data.categories||!data.categories.length)data.categories=['Чехлы','Зарядки','Наушники','Лампы','Кабели','Защитные стёкла'];
+if(!data.products)data.products=[];if(!data.sales)data.sales=[]}
+function save(){localStorage.setItem('accessoryDB_v3',JSON.stringify(data));updateStats()}
+
+function toast(msg,type){var el=document.getElementById('toast');el.className='toast card px-5 py-3 text-sm font-medium shadow-lg '+(type==='err'?'bg-red-50 text-red-800 border border-red-200':'bg-green-50 text-green-800 border border-green-200');el.textContent=msg;el.classList.remove('hidden');setTimeout(function(){el.classList.add('hidden')},2800)}
+function toggleHelp(){var f=document.getElementById('helpFull'),c=document.getElementById('helpChevron');f.classList.toggle('hidden');c.textContent=f.classList.contains('hidden')?'▾':'▴'}
+
+function showTab(name){['products','sales','history','categories'].forEach(function(t){document.getElementById('view-'+t).classList.add('hidden');var b=document.getElementById('tab-'+t);b.classList.remove('active');b.classList.add('text-gray-500')});
+document.getElementById('view-'+name).classList.remove('hidden');var a=document.getElementById('tab-'+name);a.classList.add('active');a.classList.remove('text-gray-500');
+if(name==='products')renderProducts();if(name==='sales'){fillSaleCategory();filterSaleProducts();renderCart()}
+if(name==='history'){renderHistory();renderChart();renderHourlyChart();renderTodaySales()}if(name==='categories')renderCategories()}
+
+function updateStats(){var total=data.products.length,low=data.products.filter(function(p){return p.stock<=2&&p.stock>0}).length,out=data.products.filter(function(p){return p.stock===0}).length,value=data.products.reduce(function(s,p){return s+p.price*p.stock},0),today=new Date().toLocaleDateString('ru-RU'),todaySales=data.sales.filter(function(s){return s.date.indexOf(today)===0}).reduce(function(s,x){return s+x.total},0);
+document.getElementById('statsBar').innerHTML='<div class="stat-card text-center min-w-[68px]"><div class="text-lg font-bold text-indigo-600">'+total+'</div><div class="text-[11px] text-gray-500">товаров</div></div><div class="stat-card text-center min-w-[68px]"><div class="text-lg font-bold text-emerald-600">'+value.toLocaleString('ru-RU')+'</div><div class="text-[11px] text-gray-500">₽ склад</div></div><div class="stat-card text-center min-w-[68px]"><div class="text-lg font-bold '+(todaySales?'text-violet-600':'text-gray-400')+'">'+todaySales.toLocaleString('ru-RU')+'</div><div class="text-[11px] text-gray-500">сегодня</div></div>'+((low||out)?'<div class="stat-card text-center min-w-[68px]"><div class="text-lg font-bold text-red-500">'+(low+out)+'</div><div class="text-[11px] text-gray-500">мало</div></div>':'')}
+
+function renderCategories(){document.getElementById('categoriesList').innerHTML=data.categories.map(function(c,i){var count=data.products.filter(function(p){return p.category===c}).length;return '<div class="flex items-center justify-between py-2.5 px-3 rounded-xl hover:bg-gray-50"><div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-indigo-400"></span><span class="font-medium">'+c+'</span><span class="badge bg-gray-100 text-gray-500">'+count+'</span></div><button onclick="deleteCategory('+i+')" class="text-red-400 text-sm px-2">удалить</button></div>'}).join('');fillCategorySelects()}
+function addCategory(){var n=document.getElementById('newCategory').value.trim();if(!n)return;if(data.categories.indexOf(n)>=0){toast('Уже есть','err');return}data.categories.push(n);document.getElementById('newCategory').value='';save();renderCategories();toast('Добавлено')}
+function deleteCategory(i){if(!confirm('Удалить категорию?'))return;data.categories.splice(i,1);save();renderCategories();toast('Удалено')}
+function fillCategorySelects(){var o=data.categories.map(function(c){return '<option value="'+c+'">'+c+'</option>'}).join('');var e=document.getElementById('pCategory');if(e)e.innerHTML=o}
+function fillSaleCategory(){document.getElementById('saleCategory').innerHTML='<option value="">Все категории</option>'+data.categories.map(function(c){return '<option value="'+c+'">'+c+'</option>'}).join('')}
+
+function toggleLowOnly(){lowOnly=!lowOnly;var b=document.getElementById('btnLowOnly');b.className=lowOnly?'px-3 py-2.5 text-sm rounded-xl border border-red-300 bg-red-50 text-red-600 whitespace-nowrap':'px-3 py-2.5 text-sm rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-red-50 whitespace-nowrap';renderProducts()}
+
+function renderProducts(){var q=document.getElementById('searchInput').value.toLowerCase().trim(),list=data.products.slice();
+if(q)list=list.filter(function(p){return p.name.toLowerCase().indexOf(q)>=0||(p.models&&p.models.toLowerCase().indexOf(q)>=0)||(p.note&&p.note.toLowerCase().indexOf(q)>=0)});
+if(lowOnly)list=list.filter(function(p){return p.stock<=2});
+var groups={};data.categories.forEach(function(c){groups[c]=[]});list.forEach(function(p){if(!groups[p.category])groups[p.category]=[];groups[p.category].push(p)});
+var unknown=list.filter(function(p){return data.categories.indexOf(p.category)<0});if(unknown.length)groups['Прочее']=unknown;
+var keys=Object.keys(groups).filter(function(k){return groups[k].length>0||(!q&&!lowOnly&&data.categories.indexOf(k)>=0)});
+var container=document.getElementById('productsList');
+if(!keys.length){container.innerHTML='<div class="text-center text-gray-400 py-14"><div class="text-4xl mb-2">📦</div>Ничего не найдено</div>';return}
+if(q||lowOnly)keys.forEach(function(k){openCategories[k]=true});
+container.innerHTML=keys.map(function(cat){var items=groups[cat]||[],isOpen=openCategories[cat],lowCount=items.filter(function(p){return p.stock<=2}).length;
+return '<div class="card overflow-hidden"><div class="accordion-header flex items-center justify-between px-4 py-3.5" onclick="toggleAccordion(\''+cat+'\')"><div class="flex items-center gap-3"><span class="chevron text-gray-400 text-xs '+(isOpen?'open':'')+'">▼</span><span class="font-semibold">'+cat+'</span><span class="badge bg-indigo-50 text-indigo-600">'+items.length+'</span>'+(lowCount?'<span class="badge bg-red-50 text-red-500">'+lowCount+' мало</span>':'')+'</div></div><div class="accordion-body '+(isOpen?'open':'')+'"><div class="px-3 pb-3 space-y-1.5">'+(items.length?items.map(productRow).join(''):'<div class="text-sm text-gray-400 px-2 py-2">Пусто</div>')+'</div></div></div>'}).join('')}
+
+function productRow(p){var range=(p.minPrice||p.maxPrice)?'<span class="text-xs text-gray-400 ml-1">('+(p.minPrice||'—')+'–'+(p.maxPrice||'—')+')</span>':'';
+return '<div class="product-row flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 group">'+(p.photo?'<img src="'+p.photo+'" class="photo-thumb">':'<div class="photo-thumb flex items-center justify-center text-gray-300 text-xs">нет</div>')+'<div class="flex-1 min-w-0"><div class="font-medium text-sm truncate">'+p.name+'</div><div class="text-xs text-gray-500 truncate">'+(p.models||'')+(p.note?((p.models?' · ':'')+p.note):'')+'</div><div class="text-sm mt-0.5"><span class="fo
