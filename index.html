@@ -125,14 +125,25 @@
             <h2 class="font-semibold" id="whListTitle">—</h2>
             <div class="text-xs text-gray-500" id="whProgress">0 из 0</div>
           </div>
-          <div class="flex gap-2 text-sm">
-            <button onclick="clearCollected()" class="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">Очистить собранные</button>
-            <button onclick="deleteWhList()" class="px-3 py-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50">Удалить список</button>
+          <div class="flex flex-wrap gap-2 text-sm">
+            <button onclick="renameWhList()" class="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">Переименовать</button>
+            <button onclick="duplicateWhList()" class="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">Копировать</button>
+            <button onclick="exportWhListText()" class="px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50">Текст</button>
+            <button onclick="clearCollected()" class="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">Убрать собранные</button>
+            <button onclick="deleteWhList()" class="px-3 py-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50">Удалить</button>
           </div>
         </div>
 
-        <div class="flex gap-2 mb-3">
-          <input type="text" id="whSearch" placeholder="Добавить товар (название или модель)..." class="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm" oninput="filterWhProducts()">
+        <div class="flex flex-col sm:flex-row gap-2 mb-3">
+          <select id="whCategory" onchange="filterWhProducts()" class="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white">
+            <option value="">Все категории</option>
+          </select>
+          <input type="text" id="whSearch" placeholder="Название или модель..." class="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm" oninput="filterWhProducts()">
+        </div>
+        <div class="flex gap-2 mb-2 text-sm">
+          <button onclick="addAllFromCategory()" class="px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50">+ Вся категория</button>
+          <button onclick="markAllCollected()" class="px-3 py-1.5 rounded-lg border border-green-200 text-green-600 hover:bg-green-50">✓ Всё собрано</button>
+          <button onclick="unmarkAll()" class="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">Снять галочки</button>
         </div>
         <div id="whProductPicker" class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto mb-2"></div>
       </div>
@@ -637,15 +648,20 @@ function renderWhList() {
     ? collected.map(function(item){ return whItemRow(item, list.items.indexOf(item)); }).join('')
     : '<div class="text-sm text-gray-400 py-2">Пока пусто</div>';
 
+  fillWhCategory();
   filterWhProducts();
 }
 
 function whItemRow(item, idx) {
+  var sub = [];
+  if (item.category) sub.push(item.category);
+  sub.push(item.qty + ' шт');
+  if (item.note) sub.push(item.note);
   return '<div class="wh-item flex items-center gap-3 p-2.5 rounded-xl border border-gray-100 '+(item.collected?'collected':'')+'">' +
     '<input type="checkbox" class="wh-check" '+(item.collected?'checked':'')+' onchange="toggleWhItem('+idx+')">' +
     '<div class="flex-1 min-w-0">' +
     '<div class="font-medium text-sm '+(item.collected?'line-through text-gray-400':'')+'">'+item.name+'</div>' +
-    '<div class="text-xs text-gray-500">'+item.qty+' шт'+(item.note?' · '+item.note:'')+'</div></div>' +
+    '<div class="text-xs text-gray-500">'+sub.join(' · ')+'</div></div>' +
     '<div class="flex items-center gap-1">' +
     '<button onclick="changeWhQty('+idx+',-1)" class="w-7 h-7 rounded-lg bg-gray-100 text-sm font-bold">−</button>' +
     '<span class="w-6 text-center text-sm">'+item.qty+'</span>' +
@@ -695,8 +711,18 @@ function deleteWhList() {
   toast('Список удалён');
 }
 
+function fillWhCategory() {
+  var sel = document.getElementById('whCategory');
+  if (!sel) return;
+  var cur = sel.value;
+  sel.innerHTML = '<option value="">Все категории</option>' +
+    data.categories.map(function(c){ return '<option value="'+c+'">'+c+'</option>'; }).join('');
+  if (cur) sel.value = cur;
+}
+
 function filterWhProducts() {
   var q = (document.getElementById('whSearch').value || '').toLowerCase().trim();
+  var cat = (document.getElementById('whCategory') || {}).value || '';
   var list = getActiveList();
   var box = document.getElementById('whProductPicker');
   if (!list) { box.innerHTML = ''; return; }
@@ -706,21 +732,21 @@ function filterWhProducts() {
 
   var products = data.products.filter(function(p){
     if (already[p.id]) return false;
+    if (cat && p.category !== cat) return false;
     if (!q) return true;
     return p.name.toLowerCase().indexOf(q)>=0 || (p.models&&p.models.toLowerCase().indexOf(q)>=0);
-  }).slice(0, 20);
+  }).slice(0, 30);
 
   if (!products.length) {
-    box.innerHTML = q
-      ? '<div class="text-sm text-gray-400 col-span-2 py-2 text-center">Ничего не найдено</div>'
-      : '<div class="text-sm text-gray-400 col-span-2 py-2 text-center">Введите название для поиска</div>';
+    box.innerHTML = '<div class="text-sm text-gray-400 col-span-2 py-2 text-center">' +
+      (q || cat ? 'Ничего не найдено' : 'Выберите категорию или введите название') + '</div>';
     return;
   }
 
   box.innerHTML = products.map(function(p){
     return '<div class="sale-product-card border border-gray-200 rounded-xl p-2.5 flex items-center gap-2" onclick="addToWhList(\''+p.id+'\')">' +
       '<div class="flex-1 min-w-0"><div class="font-medium text-sm truncate">'+p.name+'</div>' +
-      '<div class="text-xs text-gray-500">'+p.category+(p.stock?' · '+p.stock+' шт':'')+'</div></div>' +
+      '<div class="text-xs text-gray-500">'+p.category+(p.stock!==undefined?' · '+p.stock+' шт':'')+(p.models?' · '+p.models:'')+'</div></div>' +
       '<span class="text-indigo-500 text-lg">+</span></div>';
   }).join('');
 }
@@ -737,13 +763,114 @@ function addToWhList(productId) {
     productId: p.id,
     name: p.name,
     qty: 1,
-    note: p.models || '',
+    note: p.models || p.category || '',
+    category: p.category || '',
     collected: false
   });
   document.getElementById('whSearch').value = '';
   save();
   renderWhList();
-  toast('Добавлено в список');
+  toast('Добавлено');
+}
+
+function addAllFromCategory() {
+  var cat = (document.getElementById('whCategory') || {}).value || '';
+  if (!cat) { toast('Сначала выберите категорию','err'); return; }
+  var list = getActiveList();
+  if (!list) return;
+  var already = {};
+  list.items.forEach(function(i){ already[i.productId] = true; });
+  var added = 0;
+  data.products.forEach(function(p){
+    if (p.category !== cat) return;
+    if (already[p.id]) return;
+    list.items.push({
+      productId: p.id,
+      name: p.name,
+      qty: 1,
+      note: p.models || '',
+      category: p.category,
+      collected: false
+    });
+    added++;
+  });
+  if (!added) { toast('Все товары этой категории уже в списке','err'); return; }
+  save();
+  renderWhList();
+  toast('Добавлено: '+added);
+}
+
+function markAllCollected() {
+  var list = getActiveList();
+  if (!list || !list.items.length) return;
+  list.items.forEach(function(i){ i.collected = true; });
+  save();
+  renderWhList();
+  toast('Всё отмечено');
+}
+
+function unmarkAll() {
+  var list = getActiveList();
+  if (!list || !list.items.length) return;
+  list.items.forEach(function(i){ i.collected = false; });
+  save();
+  renderWhList();
+  toast('Галочки сняты');
+}
+
+function renameWhList() {
+  var list = getActiveList();
+  if (!list) return;
+  var name = prompt('Новое название списка:', list.name);
+  if (!name || !name.trim()) return;
+  list.name = name.trim();
+  save();
+  renderWarehouse();
+  toast('Переименовано');
+}
+
+function duplicateWhList() {
+  var list = getActiveList();
+  if (!list) return;
+  var id = Date.now().toString(36) + Math.random().toString(36).slice(2,5);
+  var copy = {
+    id: id,
+    name: list.name + ' (копия)',
+    items: list.items.map(function(i){
+      return { productId:i.productId, name:i.name, qty:i.qty, note:i.note||'', category:i.category||'', collected:false };
+    }),
+    created: Date.now()
+  };
+  data.warehouseLists.unshift(copy);
+  activeWhListId = id;
+  save();
+  renderWarehouse();
+  toast('Список скопирован');
+}
+
+function exportWhListText() {
+  var list = getActiveList();
+  if (!list) return;
+  var lines = [list.name, ''];
+  var todo = list.items.filter(function(i){ return !i.collected; });
+  var done = list.items.filter(function(i){ return i.collected; });
+  if (todo.length) {
+    lines.push('К сборке:');
+    todo.forEach(function(i){ lines.push('☐ '+i.name+' ×'+i.qty+(i.note?' ('+i.note+')':'')); });
+  }
+  if (done.length) {
+    lines.push('');
+    lines.push('Собрано:');
+    done.forEach(function(i){ lines.push('☑ '+i.name+' ×'+i.qty); });
+  }
+  lines.push('');
+  lines.push('Итого: '+done.length+'/'+list.items.length);
+  var text = lines.join('\n');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function(){ toast('Скопировано в буфер'); }).catch(function(){ prompt('Скопируй текст:', text); });
+  } else {
+    prompt('Скопируй текст:', text);
+  }
 }
 
 /* ========== HISTORY ========== */
