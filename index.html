@@ -240,6 +240,7 @@
         <input type="text" id="pNote" placeholder="Цвет, материал..." class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-1"></div>
       <div><label class="text-xs font-medium text-gray-500">Фото</label>
         <input type="file" id="pPhoto" accept="image/*" class="w-full text-sm mt-1" onchange="previewPhoto(event)">
+        <p class="text-[11px] text-gray-400 mt-1">Фото автоматически сжимается. Лучше до 2 МБ.</p>
         <img id="photoPreview" class="mt-2 rounded-xl hidden" style="max-height:90px;max-width:90px;object-fit:cover"></div>
     </div>
     <div class="flex gap-2 mt-5">
@@ -278,7 +279,15 @@ function load() {
   if (!data.warehouseLists) data.warehouseLists = [];
 }
 function save() {
-  localStorage.setItem('accessoryDB_v4', JSON.stringify(data));
+  try {
+    localStorage.setItem('accessoryDB_v4', JSON.stringify(data));
+  } catch (e) {
+    if (e.name === 'QuotaExceededError' || e.code === 22) {
+      toast('Память браузера заполнена. Удали лишние фото или сделай экспорт','err');
+      throw e;
+    }
+    throw e;
+  }
   updateStats();
 }
 
@@ -460,13 +469,47 @@ function closeProductModal() {
   document.getElementById('productModal').classList.remove('flex');
 }
 function previewPhoto(e) {
-  var f = e.target.files[0]; if (!f) return;
-  var r = new FileReader();
-  r.onload = function(ev) {
+  var f = e.target.files[0];
+  if (!f) return;
+  if (!f.type || f.type.indexOf('image/') !== 0) {
+    toast('Выбери файл картинки', 'err');
+    return;
+  }
+  // Сжимаем фото, чтобы влезало в localStorage
+  compressImage(f, 400, 0.7, function(dataUrl) {
     var img = document.getElementById('photoPreview');
-    img.src = ev.target.result; img.classList.remove('hidden');
+    img.src = dataUrl;
+    img.classList.remove('hidden');
+  });
+}
+
+function compressImage(file, maxSize, quality, callback) {
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    var img = new Image();
+    img.onload = function() {
+      var w = img.width, h = img.height;
+      if (w > maxSize || h > maxSize) {
+        if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
+        else { w = Math.round(w * maxSize / h); h = maxSize; }
+      }
+      var canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      var dataUrl = canvas.toDataURL('image/jpeg', quality);
+      callback(dataUrl);
+    };
+    img.onerror = function() {
+      toast('Не удалось прочитать фото', 'err');
+    };
+    img.src = ev.target.result;
   };
-  r.readAsDataURL(f);
+  reader.onerror = function() {
+    toast('Ошибка чтения файла', 'err');
+  };
+  reader.readAsDataURL(file);
 }
 function saveProduct() {
   var name = document.getElementById('pName').value.trim();
@@ -479,11 +522,14 @@ function saveProduct() {
   var note = document.getElementById('pNote').value.trim();
   var editId = document.getElementById('editId').value;
   var photoEl = document.getElementById('photoPreview');
-  var photo = photoEl.classList.contains('hidden') ? null : photoEl.src;
+  var photo = (!photoEl.classList.contains('hidden') && photoEl.src && photoEl.src.indexOf('data:') === 0)
+    ? photoEl.src
+    : null;
   if (!name) { toast('Введите название','err'); return; }
   if (!price) { toast('Укажите цену','err'); return; }
   if (editId) {
     var p = data.products.find(function(x){ return x.id===editId; });
+    if (!p) { toast('Товар не найден','err'); return; }
     p.name=name; p.category=category; p.price=price; p.minPrice=minPrice; p.maxPrice=maxPrice;
     p.stock=stock; p.models=models; p.note=note;
     if (photo) p.photo = photo;
@@ -495,8 +541,15 @@ function saveProduct() {
     });
     openCategories[category] = true;
   }
-  save(); closeProductModal(); renderProducts();
-  toast(editId?'Обновлено':'Добавлено');
+  try {
+    save();
+    closeProductModal();
+    renderProducts();
+    toast(editId ? 'Обновлено' : 'Добавлено');
+  } catch (err) {
+    console.error(err);
+    toast('Не хватает места. Убери тяжёлые фото или сделай экспорт','err');
+  }
 }
 function editProduct(id) { openProductModal(id); }
 function deleteProduct(id) {
