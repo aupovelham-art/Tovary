@@ -80,10 +80,21 @@
 
   <!-- PRODUCTS -->
   <div id="view-products">
-    <div class="flex flex-col sm:flex-row gap-2 mb-4">
-      <input type="text" id="searchInput" placeholder="Поиск: название или модель (Redmi 11...)" class="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white" oninput="renderProducts()">
-      <button onclick="toggleLowOnly()" id="btnLowOnly" class="px-3 py-2.5 text-sm rounded-xl border border-gray-200 bg-white text-gray-600 whitespace-nowrap">Только мало</button>
-      <button onclick="openProductModal()" class="btn-primary px-5 py-2.5 text-sm whitespace-nowrap">+ Товар</button>
+    <div class="flex flex-col gap-3 mb-4">
+      <div class="relative flex items-center">
+        <input type="text" id="searchInput" placeholder="Поиск по названию или модели (Redmi 11, чехол...)"
+               class="w-full border-2 border-gray-200 rounded-2xl pl-4 pr-24 py-3.5 text-base bg-white shadow-sm"
+               oninput="renderProducts()">
+        <div class="absolute right-2 flex items-center gap-1">
+          <button type="button" id="btnClearSearch" onclick="clearSearch()" class="hidden w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 text-lg leading-none" title="Очистить">×</button>
+          <button type="button" id="btnVoice" onclick="startVoiceSearch()" class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center text-lg" title="Голосовой поиск">🎤</button>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="toggleLowOnly()" id="btnLowOnly" class="px-3 py-2.5 text-sm rounded-xl border border-gray-200 bg-white text-gray-600 whitespace-nowrap">Только мало</button>
+        <button onclick="openProductModal()" class="btn-primary px-5 py-2.5 text-sm whitespace-nowrap">+ Товар</button>
+      </div>
+      <div id="voiceStatus" class="hidden text-sm text-indigo-600 font-medium px-1"></div>
     </div>
     <div id="productsList" class="space-y-3"></div>
   </div>
@@ -209,8 +220,10 @@
         <input type="text" id="newCategory" placeholder="Новая категория" class="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm" onkeydown="if(event.key==='Enter')addCategory()">
         <button onclick="addCategory()" class="btn-primary px-5 py-2.5 text-sm">Добавить</button>
       </div>
+      <p class="text-xs text-gray-400 mb-3">Нажми на фото категории, чтобы поставить картинку</p>
       <div id="categoriesList" class="space-y-2"></div>
     </div>
+    <input type="file" id="catPhotoInput" accept="image/*" class="hidden" onchange="onCatPhotoSelected(event)">
   </div>
 </div>
 
@@ -257,8 +270,11 @@ var data = {
   categories: ['Чехлы','Зарядки','Наушники','Лампы','Кабели','Защитные стёкла'],
   products: [],
   sales: [],
-  warehouseLists: []
+  warehouseLists: [],
+  categoryPhotos: {}
 };
+var pendingCatPhoto = null;
+var recognition = null;
 var cart = [];
 var chartInstance = null;
 var hourlyInstance = null;
@@ -277,6 +293,7 @@ function load() {
   if (!data.products) data.products = [];
   if (!data.sales) data.sales = [];
   if (!data.warehouseLists) data.warehouseLists = [];
+  if (!data.categoryPhotos) data.categoryPhotos = {};
 }
 function save() {
   try {
@@ -346,9 +363,39 @@ function updateStats() {
 function renderCategories() {
   document.getElementById('categoriesList').innerHTML = data.categories.map(function(c,i){
     var count = data.products.filter(function(p){ return p.category === c; }).length;
-    return '<div class="flex items-center justify-between py-2.5 px-3 rounded-xl hover:bg-gray-50"><div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-indigo-400"></span><span class="font-medium">'+c+'</span><span class="badge bg-gray-100 text-gray-500">'+count+'</span></div><button onclick="deleteCategory('+i+')" class="text-red-400 text-sm px-2">удалить</button></div>';
+    var photo = (data.categoryPhotos && data.categoryPhotos[c]) ? data.categoryPhotos[c] : null;
+    var safe = c.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    var photoHtml = photo
+      ? '<img src="'+photo+'" class="w-10 h-10 rounded-xl object-cover cursor-pointer" onclick="event.stopPropagation();pickCatPhoto(\''+safe+'\')">'
+      : '<div class="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-400 text-xs cursor-pointer" onclick="event.stopPropagation();pickCatPhoto(\''+safe+'\')">фото</div>';
+    return '<div class="flex items-center justify-between py-2.5 px-3 rounded-xl hover:bg-gray-50">' +
+      '<div class="flex items-center gap-3">'+photoHtml+'<div><span class="font-medium">'+c+'</span> <span class="badge bg-gray-100 text-gray-500 ml-1">'+count+'</span></div></div>' +
+      '<button onclick="deleteCategory('+i+')" class="text-red-400 text-sm px-2">удалить</button></div>';
   }).join('');
   fillCategorySelects();
+}
+
+function pickCatPhoto(catName) {
+  pendingCatPhoto = catName;
+  document.getElementById('catPhotoInput').click();
+}
+
+function onCatPhotoSelected(e) {
+  var f = e.target.files[0];
+  if (!f || !pendingCatPhoto) return;
+  if (typeof compressImage !== 'function') {
+    toast('Ошибка сжатия','err'); return;
+  }
+  compressImage(f, 200, 0.7, function(dataUrl) {
+    if (!data.categoryPhotos) data.categoryPhotos = {};
+    data.categoryPhotos[pendingCatPhoto] = dataUrl;
+    pendingCatPhoto = null;
+    save();
+    renderCategories();
+    renderProducts();
+    toast('Фото категории сохранено');
+  });
+  e.target.value = '';
 }
 function addCategory() {
   var n = document.getElementById('newCategory').value.trim();
@@ -383,6 +430,11 @@ function toggleLowOnly() {
 
 function renderProducts() {
   var q = document.getElementById('searchInput').value.toLowerCase().trim();
+  var clearBtn = document.getElementById('btnClearSearch');
+  if (clearBtn) {
+    if (q) clearBtn.classList.remove('hidden');
+    else clearBtn.classList.add('hidden');
+  }
   var list = data.products.slice();
   if (q) list = list.filter(function(p){
     return p.name.toLowerCase().indexOf(q)>=0 || (p.models&&p.models.toLowerCase().indexOf(q)>=0) || (p.note&&p.note.toLowerCase().indexOf(q)>=0);
@@ -409,7 +461,21 @@ function renderProducts() {
     var items = groups[cat]||[];
     var isOpen = openCategories[cat];
     var lowCount = items.filter(function(p){ return p.stock<=2; }).length;
-    return '<div class="card overflow-hidden"><div class="accordion-header flex items-center justify-between px-4 py-3.5" onclick="toggleAccordion(\''+cat+'\')"><div class="flex items-center gap-3"><span class="chevron text-gray-400 text-xs '+(isOpen?'open':'')+'">▼</span><span class="font-semibold">'+cat+'</span><span class="badge bg-indigo-50 text-indigo-600">'+items.length+'</span>'+(lowCount?'<span class="badge bg-red-50 text-red-500">'+lowCount+' мало</span>':'')+'</div></div><div class="accordion-body '+(isOpen?'open':'')+'"><div class="px-3 pb-3 space-y-1.5">'+(items.length?items.map(productRow).join(''):'<div class="text-sm text-gray-400 px-2 py-2">Пусто</div>')+'</div></div></div>';
+    var catPhoto = (data.categoryPhotos && data.categoryPhotos[cat]) ? data.categoryPhotos[cat] : null;
+    var icon = catPhoto
+      ? ('<img src="' + catPhoto + '" class="w-8 h-8 rounded-lg object-cover">')
+      : ('<span class="chevron text-gray-400 text-xs ' + (isOpen ? 'open' : '') + '">▼</span>');
+    return '<div class="card overflow-hidden">' +
+      '<div class="accordion-header flex items-center justify-between px-4 py-3.5" onclick="toggleAccordion(\'' + cat + '\')">' +
+      '<div class="flex items-center gap-3">' + icon +
+      '<span class="font-semibold">' + cat + '</span>' +
+      '<span class="badge bg-indigo-50 text-indigo-600">' + items.length + '</span>' +
+      (lowCount ? '<span class="badge bg-red-50 text-red-500">' + lowCount + ' мало</span>' : '') +
+      '</div></div>' +
+      '<div class="accordion-body ' + (isOpen ? 'open' : '') + '">' +
+      '<div class="px-3 pb-3 space-y-1.5">' +
+      (items.length ? items.map(productRow).join('') : '<div class="text-sm text-gray-400 px-2 py-2">Пусто</div>') +
+      '</div></div></div>';
   }).join('');
 }
 
@@ -1012,6 +1078,65 @@ function renderTodaySales() {
 }
 
 /* ========== EXPORT / IMPORT ========== */
+
+function clearSearch() {
+  var inp = document.getElementById('searchInput');
+  if (inp) inp.value = '';
+  var btn = document.getElementById('btnClearSearch');
+  if (btn) btn.classList.add('hidden');
+  renderProducts();
+}
+
+function startVoiceSearch() {
+  var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    toast('Голосовой поиск не поддерживается. Открой в Chrome','err');
+    return;
+  }
+  if (recognition) {
+    try { recognition.stop(); } catch(e) {}
+  }
+  recognition = new SpeechRecognition();
+  recognition.lang = 'ru-RU';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  var status = document.getElementById('voiceStatus');
+  var btn = document.getElementById('btnVoice');
+  if (status) {
+    status.classList.remove('hidden');
+    status.textContent = 'Слушаю... скажи название или модель';
+  }
+  if (btn) {
+    btn.classList.add('ring-2','ring-red-400');
+  }
+
+  recognition.onresult = function(event) {
+    var said = event.results[0][0].transcript;
+    document.getElementById('searchInput').value = said;
+    var clearBtn = document.getElementById('btnClearSearch');
+    if (clearBtn) clearBtn.classList.remove('hidden');
+    if (status) status.textContent = '«' + said + '»';
+    renderProducts();
+    setTimeout(function(){ if(status) status.classList.add('hidden'); }, 2500);
+  };
+  recognition.onerror = function(event) {
+    if (status) status.classList.add('hidden');
+    if (btn) btn.classList.remove('ring-2','ring-red-400');
+    if (event.error === 'not-allowed') toast('Разреши доступ к микрофону в браузере','err');
+    else if (event.error === 'no-speech') toast('Ничего не услышал, попробуй ещё','err');
+    else if (event.error !== 'aborted') toast('Ошибка голоса: '+event.error,'err');
+  };
+  recognition.onend = function() {
+    if (btn) btn.classList.remove('ring-2','ring-red-400');
+  };
+  try {
+    recognition.start();
+  } catch(e) {
+    toast('Не удалось запустить микрофон','err');
+  }
+}
+
 function exportData() {
   var blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
   var url = URL.createObjectURL(blob);
@@ -1043,7 +1168,8 @@ function importData(event) {
         categories: cats.length ? cats : ['Чехлы','Зарядки','Наушники','Лампы','Кабели','Защитные стёкла'],
         products: prods,
         sales: Array.isArray(sales) ? sales : [],
-        warehouseLists: Array.isArray(lists) ? lists : []
+        warehouseLists: Array.isArray(lists) ? lists : [],
+        categoryPhotos: imported.categoryPhotos || {}
       };
       activeWhListId = null;
       save();
